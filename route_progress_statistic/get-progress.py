@@ -21,6 +21,7 @@ def find_index(in_list, column_name):
             return index
     return -1
 
+
 def plot_graph(in_list):
     print("Plot chart")
     # to save time I relay on the order in the insert_line()
@@ -33,7 +34,7 @@ def plot_graph(in_list):
         sys.exit(2)
 
     for line in in_list:
-        num+=1
+        num += 1
         if num == 1:
             # skip header
             continue
@@ -62,6 +63,8 @@ def parse_args():
     parser.add_argument("-r", "--route", help="only for specific route")
     parser.add_argument("-p", "--plot", action="store_true", help="plot chart")
     parser.add_argument("-o", "--out-file", help="save result to file")
+    parser.add_argument("-d", "--devapp", action="store_true",
+                        help="Since devapp logs are different this options help to parse devapp logs correctly")
     parser.add_argument("log-file", help="log file to parse")
     args = parser.parse_args()
     config = vars(args)
@@ -90,6 +93,24 @@ def insert_line(out_list, time, route, offset, length, soc, consumption, range):
         length), string_or_empty(soc), string_or_empty(consumption), string_or_empty(range)])
 
 
+def search_chanel(line, is_devapp):
+    if is_devapp:
+        return re.search(r'navigation-trip-onboardservice.RouteProgressUpdater\(.{8}\)', line)
+    return re.search(r'navigation-trip-onboardservice-Route\(.{8}\)', line)
+
+
+def search_time(line, is_devapp):
+    #for devapp simply take symbol by symbol and convert it to eso trace time
+    # 2023-08-11T04:03:58.538 -> 11.08.1970 04:03:58.538
+    # TODO replace with datetime formater
+    if is_devapp and len(line) >= 50:
+        time_m = re.search(r'\d\d\d\d-\d\d-\d\dT\d\d:\d\d:\d\d\.\d\d\d', line[0:50])
+        if time_m:
+            datetime_str = string_or_empty(time_m)
+            line = datetime_str[8:10]+"."+datetime_str[5:7]+".1970 " + datetime_str[11:23]
+    
+    return re.search(r'\d\d\.\d\d\.1970 \d\d:\d\d:\d\d\.\d\d\d', line)
+
 def main():
 
     config = parse_args()
@@ -104,11 +125,11 @@ def main():
             if re.search(search_progress, line):
                 if config['verbose']:
                     print(line)
-                m_chanel = re.search(r'navigation-trip-onboardservice-Route\(.{8}\)', line)
+                m_chanel = search_chanel(line, config['devapp'])
                 m_route = re.search(r'\(.{8}\)', string_or_empty(m_chanel))
                 if route_filter and not route_filter in string_or_empty(m_route):
                     continue
-                m_time = re.search(r'01.01.1970 \d\d:\d\d:\d\d\.\d\d\d', line)
+                m_time = search_time(line, config['devapp'])
                 m_offset = extract_number(re.search(r'offset:\d+ cm', line))
                 m_length = extract_number(
                     re.search(r'remaining length:\d+ cm', line))
