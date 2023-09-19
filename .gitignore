@@ -33,3 +33,6 @@
 
 #other
 .vscode/*
+*/.venv/*
+*.csv
+*.csv#
