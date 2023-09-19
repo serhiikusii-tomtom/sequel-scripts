@@ -96,7 +96,7 @@ def insert_line(out_list, time, route, offset, length, soc, consumption, range):
 def search_chanel(line, is_devapp):
     if is_devapp:
         return re.search(r'navigation-trip-onboardservice.RouteProgressUpdater\(.{8}\)', line)
-    return re.search(r'navigation-trip-onboardservice-Route\(.{8}\)', line)
+    return re.search(r'navigation-trip-onboardservice-RouteProgressUpdater\(.{8}\)', line)
 
 
 def search_time(line, is_devapp):

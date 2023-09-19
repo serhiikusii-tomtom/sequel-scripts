@@ -2,6 +2,15 @@
 To be able to plot chart
 `pip install matplotlib`
 
+## Create and activate virtual environment
+virtual environment is needed to be able to plot charts
+
+`python -m venv .venv`
+`source .venv/bin/activate`
+
+## Deactivate venv
+`deactivate`
+
 # Usage
 `python get-progress.py example.log`
 
