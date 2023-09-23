@@ -62,6 +62,7 @@ def parse_args():
                         action="store_true", help="verbose logs")
     parser.add_argument("-r", "--route", help="only for specific route")
     parser.add_argument("-p", "--plot", action="store_true", help="plot chart")
+    parser.add_argument("-pr", "--preferred-route", action="store_true", help="Filter only by preferred route if any")
     parser.add_argument("-o", "--out-file", help="save result to file")
     parser.add_argument("-d", "--devapp", action="store_true",
                         help="Since devapp logs are different this options help to parse devapp logs correctly")
@@ -111,35 +112,60 @@ def search_time(line, is_devapp):
     
     return re.search(r'\d\d\.\d\d\.1970 \d\d:\d\d:\d\d\.\d\d\d', line)
 
-def main():
+def find_prefered_route_if_any(line, preferred_route):
+    if re.search(r'Setting preferred route to invalid route', line):
+        return None
 
+    m_preferred_route = re.search(r'Setting preferred route to .{8}', line)
+    if m_preferred_route:
+        return m_preferred_route.group()[-8:]
+
+    return preferred_route
+
+
+def main():
     config = parse_args()
     if config['verbose']:
         print(config)
     route_filter = config['route']
     print(f"Parsing {config['log-file']} ...")
+    # Progress splited into 2 lines: 1. Progress 2. Consumption and range
+    # Consumption and range is calculating always but route progress can be not calculated
+    # so merging 2 lines 
     with open(config['log-file'], 'r') as file:
-        search_progress = "OnPositionUpdate: progress Progress"
+        search_progress = "progress Progress\(offset"
+        search_range = "CalculateConsumptionAndRange: consumption and range"
+        prev_line = None
+        preferred_route = None
         out_list = create_list()
         for line in file:
-            if re.search(search_progress, line):
+            if config['preferred_route']:
+                preferred_route = find_prefered_route_if_any(line, preferred_route)
+            if re.search(search_range, line):
                 if config['verbose']:
                     print(line)
                 m_chanel = search_chanel(line, config['devapp'])
                 m_route = re.search(r'\(.{8}\)', string_or_empty(m_chanel))
                 if route_filter and not route_filter in string_or_empty(m_route):
                     continue
+                if preferred_route and not preferred_route in string_or_empty(m_route):
+                    continue
                 m_time = search_time(line, config['devapp'])
-                m_offset = extract_number(re.search(r'offset:\d+ cm', line))
-                m_length = extract_number(
-                    re.search(r'remaining length:\d+ cm', line))
-                m_soc = extract_number(
-                    re.search(r'vehicle state of charge:\d+.?\d*', line))
+                m_offset = extract_number(re.search(r'offset: \d+ cm', line))
                 m_consumption_and_range = re.search(
-                    r'consumption and range:ConsumptionAndRange\{consumption: \d+\.?\d* kWh\, range: \d+ cm\}', line)
+                    r'consumption and range: ConsumptionAndRange\{consumption: \d+\.?\d* kWh\, range: \d+ cm\}', line)
                 m_consumption = extract_number(
                     re.search(r'consumption: \d+\.?\d* kWh', m_consumption_and_range.group()))
                 m_range = extract_number(re.search(r'range: \d+ cm', line))
+                # data from route progress
+                if prev_line and re.search(search_progress, prev_line):
+                    m_length = extract_number(
+                        re.search(r'remaining length:\d+ cm', prev_line))
+                    m_soc = extract_number(
+                        re.search(r'vehicle state of charge:\d+.?\d*', prev_line))
+                else:
+                    m_length = None
+                    m_soc = None
                 insert_line(out_list, m_time, m_route, m_offset, m_length,
                             m_soc, m_consumption, m_range)
         if config["out_file"]:
